@@ -1,0 +1,6 @@
+dist/
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.sig
+*.asc
