@@ -1,14 +1,10 @@
 .DELETE_ON_ERROR:
-PREFIX=/tools
+include vars.mk
 
 dist:
-	mkdir dist
+	mkdir -p dist
 
-define download-md5=
-@curl -fLO $(URL)/$@
-@echo -n "md5sum: "
-@grep $@ MD5SUMS | md5sum -c -
-endef
+### bzip2
 
 bzip2-1.0.6.tar.gz: URL=http://www.bzip.org/1.0.6
 bzip2-1.0.6.tar.gz:
@@ -22,68 +18,61 @@ install-bzip2: bzip2-1.0.6
 clean-bzip2:
 	rm -rf bzip2-1.0.6
 
-gnu.org=http://ftp.gnu.org/gnu
-define download-gnu=
-curl -fLO $(URL)/$@
-curl -fLO $(URL)/$@.sig
-gpg --verify $.sig
-endef
+### gettext
 
-coreutils-8.25.tar.xz: URL=$(gnu.org)/coreutils
-coreutils-8.25.tar.xz:
+gettext-0.19.7.tar.xz: URL=$(gnu.org)/gettext
+gettext-0.19.7.tar.xz:
 	$(download-gnu)
 
-.PHONY: install-coreutils clean-coreutils
-install-coreutils: coreutils-8.25
-	cd $< && ./configure --prefix=$(PREFIX) --enable-install-program=hostname
-	$(MAKE) -C $<
-	$(MAKE) -C $< install
+.PHONY: install-gettext clean-gettext
+install-gettext: gettext-0.19.7
+	cd $</gettext-tools && EMACS=no ./configure --prefix=$(PREFIX) --disable-shared
+	$(MAKE) -C $</gettext-tools/gnulib-lib
+	$(MAKE) -C $</gettext-tools/intl pluralx.c
+	$(MAKE) -C $</gettext-tools/src msgfmt msgmerge xgettext
+	@cd $</gettext-tools && cp -v src/{msgfmt,msgmerge,xgettext} /tools/bin 
 
-clean-coreutils:
-	rm -rf coreutils-8.25
+clean-gettext:
+	rm -rf gettext-0.19.7
 
-diffutils-3.3.tar.xz: URL=$(gnu.org)/diffutils
-diffutils-3.3.tar.xz:
-	$(download-gnu)
+### simple non-GNU packages
 
-.PHONY: install-diffutils clean-diffutils
-install-diffutils: diffutils-3.3
-	cd $< && ./configure --prefix=$(PREFIX)
-	$(MAKE) -C $<
-	$(MAKE) -C $< install
+export URL_file = ftp://ftp.astron.com/pub/file
+export URL_util-linux = https://www.kernel.org/pub/linux/utils/util-linux/v2.27
+export URL_xz = http://tukaani.org/xz
 
-clean-diffutils:
-	rm -rf diffutils-3.3
+export CFG_util-linux = --without-python
+export CFG_util-linux += --disable-makeinstall-chown
+export CFG_util-linux += --without-systemdsystemunitdir
+export CFG_util-linux += PKG_CONFIG=""
 
-file-5.25.tar.gz: URL=ftp://ftp.astron.com/pub/file
-file-5.25.tar.gz:
-	$(download-md5)
+include _build-misc-file.mk
+include _build-misc-util-linux.mk
+include _build-misc-xz.mk
 
-.PHONY: install-file dist-file clean-file
-install-file: file-5.25
-	cd $< && ./configure --prefix=$(PREFIX)
-	$(MAKE) -C $<
-	$(MAKE) -C $< install
+### simple GNU packages
 
-dist/file-5.25.tar.xz: file-5.25 file-5.25/Makefile | dist
-	$(MAKE) -C $< dist-xz
-	@mv -v $</$(@F) $@
+export CFG_coreutils = --enable-install-program=hostname
+export CFG_make = --without-guile
 
-dist-file: dist/file-5.25.tar.xz
+include _build-gnu-coreutils.mk
+include _build-gnu-diffutils.mk
+include _build-gnu-findutils.mk
+include _build-gnu-gawk.mk
+include _build-gnu-grep.mk
+include _build-gnu-gzip.mk
+include _build-gnu-m4.mk
+include _build-gnu-make.mk
+include _build-gnu-patch.mk
+include _build-gnu-sed.mk
+include _build-gnu-tar.mk
+include _build-gnu-texinfo.mk
 
-clean-file:
-	rm -rf file-5.25
+_build-misc-%.mk: misc-build.mk packages
+	grep $* packages | (read p v z && m4 -D_PKG=$$p -D_VER=$$v -D_XZ=$$z misc-targets.m4 > $@)
+_build-gnu-%.mk: gnu-build.mk packages
+	grep $* packages | (read p v z && m4 -D_PKG=$$p -D_VER=$$v -D_XZ=$$z gnu-targets.m4 > $@)
 
-findutils-4.6.0.tar.gz: URL=$(gnu.org)/findutils
-findutils-4.6.0.tar.gz:
-	$(download-gnu)
-
-%: %.tar.gz
-	tar -xf $<
-
-%: %.tar.bz
-	tar -xf $<
-
-%: %.tar.xz
-	tar -xf $<
+gnu-build.mk:
+packages:
 
